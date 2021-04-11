@@ -1,0 +1,1 @@
+# itesm_segregacion
