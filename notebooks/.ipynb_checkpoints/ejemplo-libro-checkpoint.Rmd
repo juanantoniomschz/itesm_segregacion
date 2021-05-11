@@ -1,0 +1,339 @@
+---
+title: "Ejemplo de IPF"
+output: html_notebook
+---
+
+# Input Data
+
+```{r}
+sw_path = "~/Documents/Proyectos/itesm_segregacion/spatial-microsim-book/data/SimpleWorld/ind-full.csv"
+
+ind <- read.csv(sw_path)
+
+# Subsetting to remove excess information
+# ind <- ind[, c(1, 3, 19)] (Only first, third and nineteenth columns relevant)
+
+ind_full <- ind # store original ind
+ind <- ind[, -4] # remove income column
+
+ind
+```
+
+
+```{r}
+sw_age_path <- "/Users/juanantoniomschz/Documents/Proyectos/itesm_segregacion/spatial-microsim-book/data/SimpleWorld/age.csv"
+con_age <- read.csv(sw_age_path)
+
+sw_sex_path = "/Users/juanantoniomschz/Documents/Proyectos/itesm_segregacion/spatial-microsim-book/data/SimpleWorld/sex.csv"
+con_sex <- read.csv(sw_sex_path)
+
+con_age
+con_sex
+```
+
+```{r}
+print(sum(con_age)) # numero de personas en la restricción de edad
+print(sum(con_sex)) # numero de personas en la restricción de sexo
+```
+
+## Recategorising Individual Level Variables
+
+## Convertir la edad en una varaible categorica
+
+```{r}
+brks <- c(0, 49, 120) # crea los puntos de break
+labs <- c("a0_49", "a50+") # crea las etiquetas 
+ind$age <- cut(ind$age, breaks = brks, labels = labs) # sobreescribir con las bandas
+ind
+```
+
+
+```{r}
+levels(ind$age) # valores de las variables en los individuos
+names(con_age) # nombre de las columnas de la restricción de edad
+```
+
+
+
+```{r}
+names(con_age) <- levels(ind$age) # renombrar las variables
+
+cons <- cbind(con_age, con_sex) # unir las restricciones
+cons[1:2, ] # primeras dos zonas
+```
+
+## Aplanando los datos individuales
+
+```{r}
+dim(ind)
+dim(cons)
+```
+
+```{r}
+cat_age <- model.matrix(~ind$age - 1)
+cat_sex <- model.matrix(~ind$sex - 1)[, c(2, 1)] # intercambiar el orden de las columnas
+
+ind_cat <- cbind(cat_age, cat_sex)
+ind_cat
+```
+
+
+```{r}
+ind_agg <- colSums(ind_cat)
+ind_agg
+```
+
+```{r}
+rbind(cons[1,], ind_agg)
+```
+
+
+# Population Synthesis
+
+
+```{r}
+weights <- matrix(data = 1, nrow = nrow(ind), ncol = nrow(cons)) # matrix de pesos
+weights1 <- weights2 <- weights # copia de pesos
+ind_agg0 <- t(apply(cons, 1, function(x) 1 * ind_agg)) 
+colnames(ind_agg0) <- names(cons)
+ind_agg0
+```
+
+
+## IPF with ipfp
+
+```{r}
+n_zone <- nrow(cons) # numero de zonas
+n_ind <- nrow(ind) # numero de individuos
+n_age <-ncol(con_age) # numero de categorias de edad
+n_sex <-ncol(con_sex) # numero de categorias de sexo
+```
+
+### IPF con ipfp
+
+```{r}
+# install.packages("ipfp")
+library(ipfp)
+
+cons <- apply(cons, 2, as.numeric) # hacer valores numericos
+ipfp(cons[1,], t(ind_cat), x0 = rep(1, n_ind)) # corre IPF
+```
+
+El argumento de maxit nos permite controlar la cantidad de iteraciones. El argumento de v nos permite que después de cada iteración se impriman los resultados de cada iteración.
+
+
+```{r}
+ipfp(cons[1,], t(ind_cat), rep(1, n_ind), maxit = 20, v = T)
+```
+
+
+```{r}
+ind_catt <- t(ind_cat) # datos individual transpuestos
+x0 <- rep(1,n_ind) # pesos iniciales
+
+ind_catt
+x0
+```
+
+
+```{r}
+weights_maxit_2 <- weights # create a copy of the weights object
+
+for(i in 1:ncol(weights)){
+  weights_maxit_2[,i] <- ipfp(cons[i,], ind_catt, x0, maxit = 2) 
+}
+```
+
+
+```{r}
+weights_maxit_2
+```
+
+
+```{r}
+ weights <- apply(cons, MARGIN = 1, FUN = 
+                    function(x) ipfp(x, ind_catt, x0, maxit = 20))
+
+weights
+```
+
+
+```{r}
+ind_agg <- t(apply(weights, 2, function(x) colSums(x * ind_cat))) 
+colnames(ind_agg) <- colnames(cons) # haz los nombres de las columnas igual
+
+ind_agg
+cons
+```
+
+
+```{r}
+ind_agg[] <- t(apply(weights_maxit_2, MARGIN = 2, FUN = function(x) colSums(x * ind_cat)))
+ind_agg[1:2, 1:4]
+```
+
+### IPF with mipfp
+
+```{r}
+# install.packages("mipfp)
+library(mipfp)
+```
+
+```{r}
+sex <- c(Male = 23, Female = 27) # n. in each sex category
+age <- c(Less18 = 16, Workage = 20, Senior = 14) # age bands 
+diploma <- c(Level1 = 20, Level2 = 18, Level3 = 6, Level4 = 6)
+```
+
+```{r}
+target <- list(sex, age, diploma)
+descript <- list(1,2,3)
+target
+```
+
+```{r}
+names <- list (names(sex), names(age), names(diploma)) 
+weight_init <- array (1, c(2,3,4), dimnames = names) 
+weight_init[, c("Less18"), c("Level3","Level4")] <- 0
+weight_init
+```
+
+
+```{r}
+ result <- Ipfp(weight_init, descript, target, iter = 50, print = TRUE, tol = 1e-5)
+```
+
+
+```{r}
+result$x.hat # imprimir los resultados
+sum(result$x.hat)
+```
+
+```{r}
+cross <- cbind(c(11,5,0,0), c(3,9,4,4), c(6,4,2,2)) 
+rownames (cross) <- names (diploma)
+colnames (cross) <- names(age)
+# print the cross table
+cross
+```
+
+
+```{r}
+target <- list(sex, age, diploma, cross) 
+descript <- list(1, 2, 3, c(3,2))
+
+# utilizamos la función de Ipfp
+result <- Ipfp(weight_init, descript, target, iter = 50, print = TRUE, tol = 1e-5)
+```
+
+## Integerisation 
+
+```{r}
+set.seed(50)
+```
+
+
+```{r}
+int_trs <- function(x){
+  # For generalisation purpose, x becomes a vector
+  xv <- as.vector(x) # allows trs to work on matrices
+  xint <- floor(xv) # integer part of the weight
+  r <- xv - xint # decimal part of the weight
+  def <- round(sum(r)) # the deficit population
+  # the weights be 'topped up' (+ 1 applied)
+  topup <- sample(length(x), size = def, prob = r)
+  xint[topup] <- xint[topup] + 1
+  dim(xint) <- dim(x)
+  dimnames(xint) <- dimnames(x)
+  xint
+}
+```
+
+```{r}
+int_weight1 <- int_trs(weights[,1])
+weights[,1]
+int_weight1
+```
+
+```{r}
+mipfp_int <- int_trs(result$x.hat)
+result$x.hat[,,1]
+
+mipfp_int[,,1]
+```
+
+## Expansion para individuos
+
+```{r}
+int_expand_vector <- function(x){ index <- 1:length(x)
+rep(index, round(x))
+}
+```
+
+```{r}
+exp_indices <- int_expand_vector(int_weight1) 
+exp_indices
+ind_full[exp_indices,]
+```
+
+## Expansion para categorias
+
+```{r}
+int_expand_array <- function(x){
+  # Transform the array into a dataframe
+  count_data <- as.data.frame.table(x)
+  # Store the indices of categories for the final population 
+  indices <- rep(1:nrow(count_data), count_data$Freq)
+  # Create the final individuals
+  ind_data <- count_data[indices,]
+  ind_data
+}
+```
+
+```{r}
+# Expansion step
+ind_mipfp <- int_expand_array(mipfp_int)
+
+# Printing final results
+head(ind_mipfp)
+```
+
+## Integerización y expansión
+
+```{r}
+# Metodo 1: loop
+
+ints_df <- NULL 
+set.seed(42)
+
+for(i in 1:nrow(cons)){
+  # Integerise and expand
+  ints <- int_expand_vector(int_trs(weights[, i])) 
+  
+  # Take the right individuals
+  data_frame <- data.frame(ind_full[ints,]) 
+  ints_df <- rbind(ints_df, data_frame, zone = i)
+}
+
+ints_df
+
+```
+
+```{r}
+# Metodo 2: apply
+
+set.seed(42)
+ints_df2 <- NULL
+
+# Take the right indices
+ints2 <- unlist(apply(weights, 2, function(x)
+int_expand_vector(int_trs(x))))
+
+# Generate the individuals
+ints_df2 <- data.frame(ind_full[ints2,], zone = rep(1:nrow(cons), colSums(weights)))
+ints_df2
+
+```
+
+
+
