@@ -1,1 +1,1 @@
-# itesm_segregacion
+# Segregación Económica en Nuevo León
