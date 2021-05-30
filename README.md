@@ -1,1 +1,1 @@
-# Segregación Económica en Nuevo León
+# Microsimulación para medir segregación Económica en Nuevo León
