@@ -1,0 +1,65 @@
+---
+title: "Microsimulación Espacial para la Zona Metropolitana de Monterrey y municipios de Nuevo León"
+output: html_notebook
+---
+
+#Carga de datos
+Antes de comenzar con la microsimulación espacial, es pertinente mencionar las caracteristica de la zona geografíca que estamos analizando. El estado de Nuevo León cuenta con más de 2500 AGEBS registradas en el Censo de Población y Vivienda de 2020. Cada AGEB tiene registro de más de 200 variables recopiladas cada 2 años. 
+
+Para este análisis utilizaremos las variables del censo de viviendas con 1 dormitorio, viviendas con 2 o más dormitorios, viviendas con acceso a TV de paga, viviendas con acceso a internet, viviendas con acceso a una computadora, viviendas con almenos una lavadora, viviendas con consola de videojuegos y viviendas con automoviles. 
+
+De estas generamos la variable de la cantidad de viviendas que no cuentan con cada variable. Esta tabla se llamará "cons", ya que representa las restricciones que seguira nuestro algoritmo para la microsimulación espacial. 
+
+```{r}
+cons_full <- read.csv("~/Documents/Proyectos/itesm_segregacion/data/Clean data/cons.csv")
+head(cons_full)
+```
+```{r}
+ind_full <- read.csv("~/Documents/Proyectos/itesm_segregacion/data/Clean data/ind.csv")
+head(ind_full)
+```
+
+```{r}
+library(mipfp)
+library(stringi)
+```
+
+
+```{r}
+ind_full$Municipio <- stri_trans_general(str = ind_full$Municipio, id = "Latin-ASCII")
+cons_full$Municipio <- stri_trans_general(str = cons_full$Municipio, id = "Latin-ASCII")
+
+municipios_ind <- unique(ind_full$Municipio)
+municipios_cons <- unique(cons_full$Municipio)
+
+municipios <- municipios_cons[match(municipios_ind, municipios_cons)]
+municipios <- municipios[is.na(municipios)==FALSE]
+```
+
+
+```{r}
+nombres_municipios <- c("Monterrey", "San Pedro Garza Garcia", "San Nicolas de los Garza",
+                        "Guadalupe", "Apodaca", "Escobedo","Santa Catarina" )
+
+ind_zmm <- ind_full[Reduce(`|`, lapply(nombres_municipios, grepl, x = ind_full$Municipio)),]
+ind_zmm
+cons_zmm <- cons_full[Reduce(`|`, lapply(nombres_municipios, grepl, x = cons_full$Municipio)),]
+cons_zmm
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
